@@ -23,6 +23,7 @@
 #include "interfaces/crypto/Signature.h"
 #include "libutilities/DataConvertUtility.h"
 #include "libutilities/Exceptions.h"
+#include <bcos-framework/libutilities/DataConvertUtility.h>
 #include <wedpr-crypto/WedprCrypto.h>
 namespace bcos
 {
@@ -64,6 +65,18 @@ public:
         memcpy(m_keyData->data(), _data.data(), _data.size());
     }
     void decode(bytes&& _data) override { *m_keyData = std::move(_data); }
+    std::string shortHex() override
+    {
+        auto startIt = m_keyData->begin();
+        auto endIt = m_keyData->end();
+        if (m_keyData->size() > 4)
+        {
+            endIt = startIt + 4 * sizeof(byte);
+        }
+        return *toHexString(startIt, endIt) + "...";
+    }
+
+    std::string hex() override { return *toHexString(*m_keyData); }
 
 private:
     std::shared_ptr<bytes> m_keyData;
