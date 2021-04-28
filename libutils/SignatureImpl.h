@@ -34,7 +34,7 @@ DERIVE_BCOS_EXCEPTION(InvalidSignature);
 DERIVE_BCOS_EXCEPTION(InvalidSignatureData);
 DERIVE_BCOS_EXCEPTION(InvalidKey);
 DERIVE_BCOS_EXCEPTION(GenerateKeyPairException);
-class CommonKeyImpl : public KeyInterface
+class CommonKeyImpl : public crypto::KeyInterface
 {
 public:
     using Ptr = std::shared_ptr<CommonKeyImpl>;
@@ -53,18 +53,31 @@ public:
         }
         m_keyData = _data;
     }
+    explicit CommonKeyImpl(size_t _keySize, std::shared_ptr<const bytes> _data)
+    {
+        if (_data->size() < _keySize)
+        {
+            BOOST_THROW_EXCEPTION(InvalidKey() << errinfo_comment(
+                                      "invalidKey, the key size: " + std::to_string(_data->size()) +
+                                      ", expected size:" + std::to_string(_keySize)));
+        }
+        m_keyData = std::make_shared<bytes>(*_data);
+    }
     ~CommonKeyImpl() override {}
 
     const bytes& data() const override { return *m_keyData; }
     size_t size() const override { return m_keyData->size(); }
     char* mutableData() override { return (char*)m_keyData->data(); }
     const char* constData() const override { return (const char*)m_keyData->data(); }
-    std::shared_ptr<bytes> encode() const override { return m_keyData; }
+    std::shared_ptr<const bytes> encode() const override { return m_keyData; }
     void decode(bytesConstRef _data) override
     {
-        memcpy(m_keyData->data(), _data.data(), _data.size());
+        m_keyData->assign(_data.begin(), _data.end());
     }
-    void decode(bytes&& _data) override { *m_keyData = std::move(_data); }
+    void decode(bytes&& _data) override {
+        *m_keyData = std::move(_data);
+    }
+
     std::string shortHex() override
     {
         auto startIt = m_keyData->begin();
@@ -82,7 +95,7 @@ private:
     std::shared_ptr<bytes> m_keyData;
 };
 
-class CommonKeyPair : public KeyPairInterface
+class CommonKeyPair : public crypto::KeyPairInterface
 {
 public:
     using Ptr = std::shared_ptr<CommonKeyPair>;
@@ -92,14 +105,14 @@ public:
     {}
 
     ~CommonKeyPair() override {}
-    SecretPtr secretKey() const override { return m_secretKey; }
-    PublicPtr publicKey() const override { return m_publicKey; }
+    crypto::SecretPtr secretKey() const override { return m_secretKey; }
+    crypto::PublicPtr publicKey() const override { return m_publicKey; }
 
-    Address address(Hash::Ptr _hashImpl) override { return right160(_hashImpl->hash(m_publicKey)); }
+    Address address(crypto::Hash::Ptr _hashImpl) override { return right160(_hashImpl->hash(m_publicKey)); }
 
 protected:
-    PublicPtr m_publicKey;
-    SecretPtr m_secretKey;
+    crypto::PublicPtr m_publicKey;
+    crypto::SecretPtr m_secretKey;
 };
 
 class CommonKeyPairImpl : public CommonKeyPair
@@ -109,7 +122,7 @@ public:
     CommonKeyPairImpl() : CommonKeyPair(64, 32) {}
 };
 
-class Secp256k1SignatureImpl : public SignatureCrypto
+class Secp256k1SignatureImpl : public crypto::SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<Secp256k1SignatureImpl>;
@@ -118,11 +131,11 @@ public:
 
     // sign
     std::shared_ptr<bytes> sign(
-        KeyPairInterface::Ptr _keyPair, const HashType& _hash, bool) override
+        crypto::KeyPairInterface::Ptr _keyPair, const crypto::HashType& _hash, bool) override
     {
         FixedBytes<65> signatureDataArray;
         CInputBuffer privateKey{_keyPair->secretKey()->constData(), _keyPair->secretKey()->size()};
-        CInputBuffer msgHash{(const char*)_hash.data(), HashType::size};
+        CInputBuffer msgHash{(const char*)_hash.data(), crypto::HashType::size};
         COutputBuffer secp256k1SignatureResult{(char*)signatureDataArray.data(), 65};
         auto retCode = wedpr_secp256k1_sign(&privateKey, &msgHash, &secp256k1SignatureResult);
         if (retCode != 0)
@@ -136,10 +149,10 @@ public:
     }
 
     // verify
-    bool verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) override
+    bool verify(crypto::PublicPtr _pubKey, const crypto::HashType& _hash, bytesConstRef _signatureData) override
     {
         CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
-        CInputBuffer msgHash{(const char*)_hash.data(), HashType::size};
+        CInputBuffer msgHash{(const char*)_hash.data(), crypto::HashType::size};
         CInputBuffer signature{(const char*)_signatureData.data(), _signatureData.size()};
         auto verifyResult = wedpr_secp256k1_verify(&publicKey, &msgHash, &signature);
         if (verifyResult == 0)
@@ -148,16 +161,16 @@ public:
         }
         return false;
     }
-    bool verify(std::shared_ptr<bytes> _pubKeyBytes, const HashType& _hash,
+    bool verify(std::shared_ptr<const bytes> _pubKeyBytes, const crypto::HashType& _hash,
         bytesConstRef _signatureData) override
     {
         return verify(std::make_shared<CommonKeyImpl>(64, _pubKeyBytes), _hash, _signatureData);
     }
 
     // recover the public key from the given signature
-    PublicPtr recover(const HashType& _hash, bytesConstRef _signatureData) override
+    crypto::PublicPtr recover(const crypto::HashType& _hash, bytesConstRef _signatureData) override
     {
-        CInputBuffer msgHash{(const char*)_hash.data(), HashType::size};
+        CInputBuffer msgHash{(const char*)_hash.data(), crypto::HashType::size};
         CInputBuffer signature{(const char*)_signatureData.data(), _signatureData.size()};
         auto pubKey = std::make_shared<CommonKeyImpl>(64);
         COutputBuffer publicKeyResult{pubKey->mutableData(), pubKey->size()};
@@ -172,7 +185,7 @@ public:
     }
 
     // generate keyPair
-    KeyPairInterface::Ptr generateKeyPair() override
+    crypto::KeyPairInterface::Ptr generateKeyPair() override
     {
         auto keyPair = std::make_shared<CommonKeyPairImpl>();
         COutputBuffer publicKey{keyPair->publicKey()->mutableData(), keyPair->publicKey()->size()};
@@ -186,13 +199,13 @@ public:
         return keyPair;
     }
     // recoverAddress(for precompiled)
-    std::pair<bool, bytes> recoverAddress(Hash::Ptr, bytesConstRef) override
+    std::pair<bool, bytes> recoverAddress(crypto::Hash::Ptr, bytesConstRef) override
     {
         return std::make_pair(false, bytes());
     }
 };
 
-class SM2SignatureImpl : public SignatureCrypto
+class SM2SignatureImpl : public crypto::SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<SM2SignatureImpl>;
@@ -200,7 +213,7 @@ public:
     virtual ~SM2SignatureImpl() {}
 
     // sign
-    std::shared_ptr<bytes> sign(KeyPairInterface::Ptr _keyPair, const HashType& _hash,
+    std::shared_ptr<bytes> sign(crypto::KeyPairInterface::Ptr _keyPair, const crypto::HashType& _hash,
         bool _signatureWithPub = false) override
     {
         FixedBytes<64> signatureDataArray;
@@ -208,7 +221,7 @@ public:
             _keyPair->secretKey()->constData(), _keyPair->secretKey()->size()};
         CInputBuffer rawPublicKey{
             _keyPair->publicKey()->constData(), _keyPair->publicKey()->size()};
-        CInputBuffer rawMsgHash{(const char*)_hash.data(), HashType::size};
+        CInputBuffer rawMsgHash{(const char*)_hash.data(), crypto::HashType::size};
         COutputBuffer sm2SignatureResult{(char*)signatureDataArray.data(), 64};
         auto retCode =
             wedpr_sm2_sign_fast(&rawPrivateKey, &rawPublicKey, &rawMsgHash, &sm2SignatureResult);
@@ -229,10 +242,10 @@ public:
     }
 
     // verify
-    bool verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) override
+    bool verify(crypto::PublicPtr _pubKey, const crypto::HashType& _hash, bytesConstRef _signatureData) override
     {
         CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
-        CInputBuffer messageHash{(const char*)_hash.data(), HashType::size};
+        CInputBuffer messageHash{(const char*)_hash.data(), crypto::HashType::size};
 
         auto signatureWithoutPub = bytesConstRef(_signatureData.data(), 64);
         CInputBuffer signature{(const char*)signatureWithoutPub.data(), signatureWithoutPub.size()};
@@ -243,14 +256,14 @@ public:
         }
         return false;
     }
-    bool verify(std::shared_ptr<bytes> _pubKeyBytes, const HashType& _hash,
+    bool verify(std::shared_ptr<const bytes> _pubKeyBytes, const crypto::HashType& _hash,
         bytesConstRef _signatureData) override
     {
         return verify(std::make_shared<CommonKeyImpl>(64, _pubKeyBytes), _hash, _signatureData);
     }
 
     // recover the public key from the given signature
-    PublicPtr recover(const HashType& _hash, bytesConstRef _signData) override
+    crypto::PublicPtr recover(const crypto::HashType& _hash, bytesConstRef _signData) override
     {
         bytes publicKeyBytes;
         publicKeyBytes.insert(publicKeyBytes.end(), _signData.begin() + 64, _signData.end());
@@ -265,7 +278,7 @@ public:
     }
 
     // generate keyPair
-    KeyPairInterface::Ptr generateKeyPair() override
+    crypto::KeyPairInterface::Ptr generateKeyPair() override
     {
         auto keyPair = std::make_shared<CommonKeyPairImpl>();
         COutputBuffer publicKey{keyPair->publicKey()->mutableData(), keyPair->publicKey()->size()};
@@ -280,7 +293,7 @@ public:
     }
 
     // recoverAddress(for precompiled)
-    std::pair<bool, bytes> recoverAddress(Hash::Ptr, bytesConstRef) override
+    std::pair<bool, bytes> recoverAddress(crypto::Hash::Ptr, bytesConstRef) override
     {
         return std::make_pair(false, bytes());
     }
