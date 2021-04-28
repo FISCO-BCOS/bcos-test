@@ -69,7 +69,7 @@ public:
     size_t size() const override { return m_keyData->size(); }
     char* mutableData() override { return (char*)m_keyData->data(); }
     const char* constData() const override { return (const char*)m_keyData->data(); }
-    std::shared_ptr<const bytes> encode() const override { return m_keyData; }
+    std::shared_ptr<bytes> encode() const override { return m_keyData; }
     void decode(bytesConstRef _data) override
     {
         m_keyData->assign(_data.begin(), _data.end());
