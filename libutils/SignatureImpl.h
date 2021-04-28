@@ -161,7 +161,7 @@ public:
         }
         return false;
     }
-    virtual bool verify(std::shared_ptr<const bytes> _pubKeyBytes, const crypto::HashType& _hash,
+    bool verify(std::shared_ptr<const bytes> _pubKeyBytes, const crypto::HashType& _hash,
         bytesConstRef _signatureData) override
     {
         return verify(std::make_shared<CommonKeyImpl>(64, _pubKeyBytes), _hash, _signatureData);
@@ -256,7 +256,7 @@ public:
         }
         return false;
     }
-    virtual bool verify(std::shared_ptr<const bytes> _pubKeyBytes, const crypto::HashType& _hash,
+    bool verify(std::shared_ptr<const bytes> _pubKeyBytes, const crypto::HashType& _hash,
         bytesConstRef _signatureData) override
     {
         return verify(std::make_shared<CommonKeyImpl>(64, _pubKeyBytes), _hash, _signatureData);
