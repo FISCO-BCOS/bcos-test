@@ -70,13 +70,8 @@ public:
     char* mutableData() override { return (char*)m_keyData->data(); }
     const char* constData() const override { return (const char*)m_keyData->data(); }
     std::shared_ptr<bytes> encode() const override { return m_keyData; }
-    void decode(bytesConstRef _data) override
-    {
-        m_keyData->assign(_data.begin(), _data.end());
-    }
-    void decode(bytes&& _data) override {
-        *m_keyData = std::move(_data);
-    }
+    void decode(bytesConstRef _data) override { m_keyData->assign(_data.begin(), _data.end()); }
+    void decode(bytes&& _data) override { *m_keyData = std::move(_data); }
 
     std::string shortHex() override
     {
@@ -108,7 +103,10 @@ public:
     crypto::SecretPtr secretKey() const override { return m_secretKey; }
     crypto::PublicPtr publicKey() const override { return m_publicKey; }
 
-    Address address(crypto::Hash::Ptr _hashImpl) override { return right160(_hashImpl->hash(m_publicKey)); }
+    Address address(crypto::Hash::Ptr _hashImpl) override
+    {
+        return right160(_hashImpl->hash(m_publicKey));
+    }
 
 protected:
     crypto::PublicPtr m_publicKey;
@@ -149,7 +147,8 @@ public:
     }
 
     // verify
-    bool verify(crypto::PublicPtr _pubKey, const crypto::HashType& _hash, bytesConstRef _signatureData) override
+    bool verify(crypto::PublicPtr _pubKey, const crypto::HashType& _hash,
+        bytesConstRef _signatureData) override
     {
         CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
         CInputBuffer msgHash{(const char*)_hash.data(), crypto::HashType::size};
@@ -203,6 +202,7 @@ public:
     {
         return std::make_pair(false, bytes());
     }
+    KeyPairInterface::Ptr createKeyPair(SecretPtr _secretKey) override { return nullptr; }
 };
 
 class SM2SignatureImpl : public crypto::SignatureCrypto
@@ -213,8 +213,8 @@ public:
     virtual ~SM2SignatureImpl() {}
 
     // sign
-    std::shared_ptr<bytes> sign(crypto::KeyPairInterface::Ptr _keyPair, const crypto::HashType& _hash,
-        bool _signatureWithPub = false) override
+    std::shared_ptr<bytes> sign(crypto::KeyPairInterface::Ptr _keyPair,
+        const crypto::HashType& _hash, bool _signatureWithPub = false) override
     {
         FixedBytes<64> signatureDataArray;
         CInputBuffer rawPrivateKey{
@@ -242,7 +242,8 @@ public:
     }
 
     // verify
-    bool verify(crypto::PublicPtr _pubKey, const crypto::HashType& _hash, bytesConstRef _signatureData) override
+    bool verify(crypto::PublicPtr _pubKey, const crypto::HashType& _hash,
+        bytesConstRef _signatureData) override
     {
         CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
         CInputBuffer messageHash{(const char*)_hash.data(), crypto::HashType::size};
@@ -297,6 +298,7 @@ public:
     {
         return std::make_pair(false, bytes());
     }
+    KeyPairInterface::Ptr createKeyPair(SecretPtr _secretKey) override { return nullptr; }
 };
 
 }  // namespace test
