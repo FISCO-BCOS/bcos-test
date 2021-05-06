@@ -202,7 +202,7 @@ public:
     {
         return std::make_pair(false, bytes());
     }
-    KeyPairInterface::Ptr createKeyPair(SecretPtr _secretKey) override { return nullptr; }
+    KeyPairInterface::Ptr createKeyPair(SecretPtr) override { return nullptr; }
 };
 
 class SM2SignatureImpl : public crypto::SignatureCrypto
@@ -298,7 +298,7 @@ public:
     {
         return std::make_pair(false, bytes());
     }
-    KeyPairInterface::Ptr createKeyPair(SecretPtr _secretKey) override { return nullptr; }
+    KeyPairInterface::Ptr createKeyPair(SecretPtr) override { return nullptr; }
 };
 
 }  // namespace test
